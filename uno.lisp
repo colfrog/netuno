@@ -1,0 +1,42 @@
+(in-package :netuno)
+
+(defvar *colors* '("red" "yellow" "green" "blue"))
+
+(defun make-deck ()
+  (let ((deck '()))
+    (dolist (c *colors*)
+      (when (not (equal c "any"))
+	(dotimes (i 10)
+	  (push (cons (write-to-string i) c) deck)
+	  (when (/= i 0)
+	    (push (cons (write-to-string i) c) deck)))
+	(dotimes (i 2)
+	  (push (cons "draw2" c) deck)
+	  (push (cons "reverse" c) deck)
+	  (push (cons "skip" c) deck))
+	(push '("draw4" . "any") deck)
+	(push '("change color" . "any") deck)))
+    deck))
+
+(defun make-n-decks (n)
+  (cond
+    ((<= n 0) nil)
+    ((= n 1) (make-deck))
+    (t (append (make-deck) (make-decks (1- n))))))
+
+(defun shuffle-deck (deck)
+  "Fisher-Yates shuffle in-place"
+  (let ((n (length deck)))
+    (dotimes (i n)
+      (let* ((k (- n i 1))
+	     (j (random (1+ k)))
+	     (cardk (nth k deck))
+	     (cardj (nth j deck)))
+	(when (/= j k)
+	  (setf (nth k deck) cardj)
+	  (setf (nth j deck) cardk))))))
+
+(defun n-shuffle-deck (deck n)
+  (when (> n 0)
+    (shuffle-deck deck)
+    (n-shuffle-deck deck (1- n))))
