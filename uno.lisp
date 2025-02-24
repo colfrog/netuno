@@ -99,7 +99,7 @@
 (defun sort-cards (cards)
   "Sort a card by type, then colour"
   (sort (sort cards #'cards-by-type-p) #'cards-by-colour-p))
-  
+
 (defun current-player ()
   "The player whose turn this is"
   (car *players*))
@@ -111,19 +111,6 @@
 (defun reverse-order ()
   "Reverse the order, this should be called instead of next-turn after a reverse card"
   (setf *players* (reverse *players*)))
-
-(defun add-player (name)
-  "Add a player to the game"
-  (when (= (length *players*) 0)
-    (init-game))
-  (setf *players* (append *players* (list name)))
-  (setf (gethash name *hands*) 
-	(draw-n-cards '() 7)))
-
-(defun remove-player (name)
-  "Remove a player from the game"
-  (setf *players* (remove-if (lambda (p) (equal p name)) *players*))
-  (remhash name *hands*))
 
 (defun get-hand (name)
   "Get a player's hand"
@@ -147,3 +134,39 @@
   "Transform a hand to a string"
   (when hand
     (string-trim " " (concatenate 'string (card-to-string (car hand)) " " (hand-to-string (cdr hand))))))
+
+(defun add-player (name)
+  "Add a player to the game"
+  (when (= (length *players*) 0)
+    (init-game))
+  (setf *players* (append *players* (list name)))
+  (set-hand name (draw-n-cards '() 7))
+  (sort-hand name))
+
+(defun remove-player (name)
+  "Remove a player from the game"
+  (setf *players* (remove name *players* :test #'equal))
+  (remhash name *hands*))
+
+(defun play-card (name card)
+  "Plays the card from the player's hand and apply side effects"
+  (let ((hand-length (length (get-hand name)))
+	(new-hand (remove card (get-hand name) :test #'equal)))
+    (when (and (card-playable-p card *top-card*)
+	       (< (length new-hand) hand-length))
+      (set-hand name new-hand)
+      (cond
+	;; draw4 and change color require interaction with the user
+	;; and are left to the server
+	((equal (car card) "draw2")
+	 (progn
+	   (let ((player (cadr *players*)))
+	     (set-hand player (draw-n-cards (get-hand player) 2))
+	     (next-turn))))
+	((equal (car card) "skip")
+	 (next-turn))
+	((equal (car card) "reverse")
+	 (reverse-order)))
+      (when (not (equal (car card) "reverse"))
+	(next-turn))
+      (setf *top-card* card))))
