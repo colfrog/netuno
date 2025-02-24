@@ -1,3 +1,3 @@
 (defpackage netuno
-  (:use #:cl)
-  (:export #:start-netuno))
+  (:use #:cl #:bt #:usocket)
+  (:export #:start-netuno #:stop-netuno))

@@ -49,17 +49,19 @@
     (n-shuffle-deck deck (1- n))))
 
 (defun init-deck ()
-  (let ((deck-count (ceiling (/ (length *players*) 4))))
+  (let ((deck-count (max 1 (ceiling (/ (length *players*) 4)))))
     (setf *deck* (make-n-decks deck-count))
     (n-shuffle-deck *deck* 7)))
 
 (defun init-top-card ()
   (when (= (length *deck*) 0)
     (init-deck))
-  (setf *top-card* (pop *deck*))
-  (when (equal (car *top-card*) "draw4")
-    (setf *deck* (append *deck* *top-card*))
-    (init-top-card)))
+  (let ((top-card (pop *deck*)))
+    (if (equal (car top-card) "draw4")
+	(progn
+	  (setf *deck* (append *deck* top-card))
+	  (init-top-card))
+	(play-card nil top-card))))
 
 (defun init-game ()
   (init-deck)
@@ -137,6 +139,7 @@
 
 (defun add-player (name)
   "Add a player to the game"
+  (print (length *players*))
   (when (= (length *players*) 0)
     (init-game))
   (setf *players* (append *players* (list name)))
@@ -150,17 +153,19 @@
 
 (defun play-card (name card)
   "Plays the card from the player's hand and apply side effects"
-  (let ((hand-length (length (get-hand name)))
-	(new-hand (remove card (get-hand name) :test #'equal)))
-    (when (and (card-playable-p card *top-card*)
-	       (< (length new-hand) hand-length))
-      (set-hand name new-hand)
+  (let ((hand-length (if name (length (get-hand name)) 0))
+	(new-hand (when name (remove card (get-hand name) :test #'equal))))
+    (when (or (null name)
+	      (and (card-playable-p card *top-card*)
+		   (< (length new-hand) hand-length)))
+      (when name
+	(set-hand name new-hand))
       (cond
 	;; draw4 and change color require interaction with the user
 	;; and are left to the server
 	((equal (car card) "draw2")
 	 (progn
-	   (let ((player (cadr *players*)))
+	   (let ((player (if name (cadr *players*) (car *players*))))
 	     (set-hand player (draw-n-cards (get-hand player) 2))
 	     (next-turn))))
 	((equal (car card) "skip")
