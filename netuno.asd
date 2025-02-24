@@ -6,5 +6,4 @@
     :description "A game of uno on raw sockets"
     :components ((:file "package")
 		 (:file "uno")
-		 (:file "game")
 		 (:file "server")))

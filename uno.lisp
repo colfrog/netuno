@@ -1,6 +1,10 @@
 (in-package :netuno)
 
 (defvar *colors* '("red" "yellow" "green" "blue"))
+(defvar *players* '())
+(defvar *hands* (make-hash-table :test 'equal))
+(defvar *deck* '())
+(defvar *top-card* nil)
 
 (defun make-deck ()
   "Make a standard uno deck"
@@ -24,7 +28,7 @@
   (cond
     ((<= n 0) nil)
     ((= n 1) (make-deck))
-    (t (append (make-deck) (make-decks (1- n))))))
+    (t (append (make-deck) (make-n-decks (1- n))))))
 
 (defun shuffle-deck (deck)
   "Fisher-Yates shuffle in-place"
@@ -44,23 +48,102 @@
     (shuffle-deck deck)
     (n-shuffle-deck deck (1- n))))
 
+(defun init-deck ()
+  (let ((deck-count (ceiling (/ (length *players*) 4))))
+    (setf *deck* (make-n-decks deck-count))
+    (n-shuffle-deck *deck* 7)))
+
+(defun init-top-card ()
+  (when (= (length *deck*) 0)
+    (init-deck))
+  (setf *top-card* (pop *deck*))
+  (when (equal (car *top-card*) "draw4")
+    (setf *deck* (append *deck* *top-card*))
+    (init-top-card)))
+
+(defun init-game ()
+  (init-deck)
+  (init-top-card))
+
 (defun card-playable-p (card top-card)
   "Whether this card is playable on the top card"
   (or (equal (cdr card) "any")
       (equal (cdr card) (cdr top-card))
       (equal (car card) (car top-card))))
 
+(defun cards-by-type-p (card1 card2)
+  "Compares two cards by their type, in ASCII order"
+  (let* ((type1 (car card1))
+	 (type2 (car card2))
+	 (mini (min (length type1) (length type2))))
+  (do ((i 0 (1+ i)))
+      ((or (char/= (aref type1 i) (aref type2 i)) (= i (1- mini)))
+       (char<= (aref type1 i) (aref type2 i))))))
+
 (defun cards-by-colour-p (card1 card2)
   "Compares two cards by their colour, in alphabetical order"
-  (char< (aref card1 0) (aref card2 0)))
+  (char< (aref (cdr card1) 0) (aref (cdr card2) 0)))
 
-(defun draw-card (deck hand)
+(defun draw-card (hand)
   "Draws a card and sorts the hand, returns the new hand"
-  (push (pop deck) hand)
-  (sort hand #'cards-by-colour-p))
+  (when (= (length *deck*) 0)
+    (init-deck))
+  (push (pop *deck*) hand))
 
-(defun draw-n-cards (deck hand n)
+(defun draw-n-cards (hand n)
   "Draws n cards sorting the hand, returns the hand"
   (if (<= n 0)
       hand
-      (draw-n-cards deck (draw-card deck hand) (1- n))))
+      (draw-n-cards (draw-card hand) (1- n))))
+
+(defun sort-cards (cards)
+  "Sort a card by type, then colour"
+  (sort (sort cards #'cards-by-type-p) #'cards-by-colour-p))
+  
+(defun current-player ()
+  "The player whose turn this is"
+  (car *players*))
+
+(defun next-turn ()
+  "Choose the next player"
+  (append *players* (pop *players*)))
+
+(defun reverse-order ()
+  "Reverse the order, this should be called instead of next-turn after a reverse card"
+  (setf *players* (reverse *players*)))
+
+(defun add-player (name)
+  "Add a player to the game"
+  (when (= (length *players*) 0)
+    (init-game))
+  (setf *players* (append *players* (list name)))
+  (setf (gethash name *hands*) 
+	(draw-n-cards '() 7)))
+
+(defun remove-player (name)
+  "Remove a player from the game"
+  (setf *players* (remove-if (lambda (p) (equal p name)) *players*))
+  (remhash name *hands*))
+
+(defun get-hand (name)
+  "Get a player's hand"
+  (gethash name *hands*))
+
+(defun set-hand (name value)
+  "Set a player's hand"
+  (setf (gethash name *hands*) value))
+
+(defun sort-hand (name)
+  "Sort a player's hand"
+  (set-hand name (sort-cards (get-hand name))))
+
+(defun card-to-string (card)
+  "Transform a card to a string"
+  (if (equal (cdr card) "any")
+      (format nil "[~a]" (car card))
+      (format nil "[~a ~a]" (cdr card) (car card))))
+
+(defun hand-to-string (hand)
+  "Transform a hand to a string"
+  (when hand
+    (string-trim " " (concatenate 'string (card-to-string (car hand)) " " (hand-to-string (cdr hand))))))
