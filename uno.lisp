@@ -2,6 +2,7 @@
 
 (defvar *colors* '("red" "yellow" "green" "blue"))
 (defvar *players* '())
+(defvar *players-lock* (make-lock))
 (defvar *hands* (make-hash-table :test 'equal))
 (defvar *deck* '())
 (defvar *top-card* nil)
@@ -59,7 +60,7 @@
   (let ((top-card (pop *deck*)))
     (if (equal (car top-card) "draw4")
 	(progn
-	  (setf *deck* (append *deck* top-card))
+	  (setf *deck* (append *deck* (list top-card)))
 	  (init-top-card))
 	(play-card nil top-card))))
 
@@ -70,6 +71,7 @@
 (defun card-playable-p (card top-card)
   "Whether this card is playable on the top card"
   (or (equal (cdr card) "any")
+      (equal (cdr top-card) "any")
       (equal (cdr card) (cdr top-card))
       (equal (car card) (car top-card))))
 
@@ -108,11 +110,15 @@
 
 (defun next-turn ()
   "Choose the next player"
-  (append *players* (pop *players*)))
+  (with-lock-held (*players-lock*)
+    (let ((player (pop *players*)))
+      (print player)
+      (setf *players* (append *players* (list player))))))
 
 (defun reverse-order ()
   "Reverse the order, this should be called instead of next-turn after a reverse card"
-  (setf *players* (reverse *players*)))
+  (with-lock-held (*players-lock*)
+    (setf *players* (reverse *players*))))
 
 (defun get-hand (name)
   "Get a player's hand"
@@ -132,23 +138,26 @@
       (format nil "[~a]" (car card))
       (format nil "[~a ~a]" (cdr card) (car card))))
 
-(defun hand-to-string (hand)
+(defun hand-to-string (hand &optional (n 1))
   "Transform a hand to a string"
   (when hand
-    (string-trim " " (concatenate 'string (card-to-string (car hand)) " " (hand-to-string (cdr hand))))))
+    (string-trim " " (concatenate 'string (write-to-string n) ":"
+				  (card-to-string (car hand)) " "
+				  (hand-to-string (cdr hand) (1+ n))))))
 
 (defun add-player (name)
   "Add a player to the game"
-  (print (length *players*))
   (when (= (length *players*) 0)
     (init-game))
-  (setf *players* (append *players* (list name)))
+  (with-lock-held (*players-lock*)
+    (setf *players* (append *players* (list name))))
   (set-hand name (draw-n-cards '() 7))
   (sort-hand name))
 
 (defun remove-player (name)
   "Remove a player from the game"
-  (setf *players* (remove name *players* :test #'equal))
+  (with-lock-held (*players-lock*)
+    (setf *players* (remove name *players* :test #'equal)))
   (remhash name *hands*))
 
 (defun play-card (name card)
