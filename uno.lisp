@@ -88,17 +88,18 @@
   "Compares two cards by their colour, in alphabetical order"
   (char< (aref (cdr card1) 0) (aref (cdr card2) 0)))
 
-(defun draw-card (hand)
-  "Draws a card and sorts the hand, returns the new hand"
+(defun draw-card ()
+  "Draws a card"
   (when (= (length *deck*) 0)
     (init-deck))
-  (push (pop *deck*) hand))
+  (pop *deck*))
 
-(defun draw-n-cards (hand n)
-  "Draws n cards sorting the hand, returns the hand"
-  (if (<= n 0)
-      hand
-      (draw-n-cards (draw-card hand) (1- n))))
+(defun draw-n-cards (n)
+  "Draws n cards and returns them"
+  (when (> n 0)
+    (cons
+     (draw-card)
+     (draw-n-cards (1- n)))))
 
 (defun sort-cards (cards)
   "Sort a card by type, then colour"

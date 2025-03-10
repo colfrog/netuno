@@ -151,7 +151,13 @@
 			    (card-to-string card) (card-to-string *top-card*))
 		    (force-output (socket-stream conn)))
 		   (t (play-card name card)
-		      (announce-turn)))))))
+		      (let ((type (car *top-card*)))
+			(cond
+			  ((equal type "draw4")
+			   (handle-draw4 name))
+			  ((equal type "change color")
+			   (handle-change-color name))
+			  (t (announce-turn))))))))))
 	(t
 	 (progn
 	   (format (socket-stream conn) "~a~%" line)
