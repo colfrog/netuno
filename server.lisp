@@ -6,6 +6,7 @@
 (defvar *socket* nil)
 (defvar *connections* (make-hash-table :test 'equal))
 (defvar *player-conns* (make-hash-table :test 'equal))
+(defvar *challenge* nil)
 
 (defun show-players-conn (conn)
   (format (socket-stream conn) "List of players: ~{~A~^, ~}~%" *players*)
@@ -102,6 +103,47 @@
 	     *connections*))
   (socket-close conn))
 
+(defun handle-draw4 (can-play player)
+  (let* ((challenger (car *players*))
+	 (challenger-conn (gethash challenger *player-conns*)))
+    (format (socket-stream challenger-conn) "Would you like to challenge the draw4?~%")
+    (force-output (socket-stream challenger-conn))
+    (setf *challenge* (list can-play player challenger))))
+
+(defun challenge (predicate)
+  (when *challenge*
+    (let ((player-conn (gethash (cadr *challenge*) *player-conns*))
+	  (challenger-conn (gethash (cadr *challenge*) *player-conns*)))
+      (if predicate
+	  (progn
+	    (maphash (lambda (conn name)
+		       (declare (ignore name))
+		       (format (socket-stream conn) "~a challenges ~a on their draw4~%" (caddr *challenge*) (cadr *challenge))
+		       (force-output (socket-stream conn)))
+		     *connections*)
+	    (format (socket-stream challenger-conn) "~a's hand: ~a~%" (cadr *challenge*) (hand-to-string (get-hand (cadr *challenge*))))
+	    (force-output (socket-stream challenger-conn))
+	    (if (car *challenge*)
+		(progn
+		  (maphash (lambda (conn name)
+			     (declare (ignore name))
+			     (format (socket-stream conn) "The challenge failed!~%")
+			     (force-output (socket-stream conn)))
+			   *connections*)
+		  (draw-n-cards-and-print (caddr *challenge*) 6 :stream challenger-conn)
+		  (next-turn))
+		(progn
+		  (maphash (lambda (conn name)
+			     (declare (ignore name))
+			     (format (socket-stream conn) "The challenge succeeds!~%")
+			     (force-output (socket-stream conn))))
+		  (draw-n-cards-and-print (cadr *challenge*) 4 :stream player-conn))))
+	  (progn
+	    (draw-n-cards-and-print (caddr *challenge*) 4 :stream challenger-conn)
+	    (next-turn)))
+      (setf *challenge* nil)
+      (announce-turn))))
+
 (defun handle-connection (conn)
   (let ((name (init-connection conn)))
     (do ((line (get-connection-line conn)
@@ -123,41 +165,45 @@
 	 (show-top-card name))
 	((and (>= (length line) 4) (equal (subseq line 0 4) "turn"))
 	 (show-current-turn name))
+	((and (>= (length line) 1) (equal (subseq line 0 1) "y"))
+	 (challenge name t))
+	((and (>= (length line) 1) (equal (subseq line 0 1) "n"))
+	 (challenge name nil))
 	((and (> (length line) 5) (equal (subseq line 0 5) "play "))
-	 (if (= (length *players*) 1)
-	     (progn
-	       (format (socket-stream conn) "Wait until there are at least 2 players~%")
-	       (force-output (socket-stream conn)))
-	     (let* ((card-number (handler-case (1- (parse-integer (subseq line 5)))
-				   (error (err)
-				     (declare (ignore err))
-				     (format (socket-stream conn) "Invalid card number~%")
-				     (force-output (socket-stream conn))
-				     nil)))
-		    (card (when card-number
-			    (let ((hand (get-hand name)))
-			      (if (or (< card-number 0) (>= card-number (length hand)))
-				  (progn
-				    (format (socket-stream conn) "Invalid card number~%")
-				    (force-output (socket-stream conn)))
-				  (nth card-number hand))))))
-	       (when card
-		 (cond
-		   ((not (equal (current-player) name))
-		    (format (socket-stream conn) "It's not your turn!~%")
-		    (force-output (socket-stream conn)))
-		   ((not (card-playable-p card *top-card*))
-		    (format (socket-stream conn) "You can't play a ~a on a ~a~%"
-			    (card-to-string card) (card-to-string *top-card*))
-		    (force-output (socket-stream conn)))
-		   (t (play-card name card)
-		      (let ((type (car *top-card*)))
-			(cond
-			  ((equal type "draw4")
-			   (handle-draw4 name))
-			  ((equal type "change color")
-			   (handle-change-color name))
-			  (t (announce-turn))))))))))
+	 (when (null challenge)
+	   (if (= (length *players*) 1)
+	       (progn
+		 (format (socket-stream conn) "Wait until there are at least 2 players~%")
+		 (force-output (socket-stream conn)))
+	       (let* ((card-number (handler-case (1- (parse-integer (subseq line 5)))
+				     (error (err)
+				       (declare (ignore err))
+				       (format (socket-stream conn) "Invalid card number~%")
+				       (force-output (socket-stream conn))
+				       nil)))
+		      (card (when card-number
+			      (let ((hand (get-hand name)))
+				(if (or (< card-number 0) (>= card-number (length hand)))
+				    (progn
+				      (format (socket-stream conn) "Invalid card number~%")
+				      (force-output (socket-stream conn)))
+				    (nth card-number hand))))))
+		 (when card
+		   (cond
+		     ((not (equal (current-player) name))
+		      (format (socket-stream conn) "It's not your turn!~%")
+		      (force-output (socket-stream conn)))
+		     ((not (card-playable-p card *top-card*))
+		      (format (socket-stream conn) "You can't play a ~a on a ~a~%"
+			      (card-to-string card) (card-to-string *top-card*))
+		      (force-output (socket-stream conn)))
+		     (t (play-card name card :stream (socket-stream conn))
+			(let ((type (car *top-card*)))
+			  (cond ((equal type "draw4")
+				 (handle-draw4 name))
+				((equal type "change color")
+				 (handle-change-color name))
+				(t (announce-turn)))))))))))
 	(t
 	 (progn
 	   (format (socket-stream conn) "~a~%" line)

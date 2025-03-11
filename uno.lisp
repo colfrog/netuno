@@ -101,6 +101,16 @@
      (draw-card)
      (draw-n-cards (1- n)))))
 
+(defun draw-n-cards-and-print (name n &keyword (stream nil))
+  "Draws n cards, prints them and adds them to the hand"
+  (let ((cards (draw-n-cards n)))
+    (format stream "You drew: ")
+    (dolist (card cards)
+      (format stream "~a" (card-to-string card)))
+    (format stream "~%")
+    (force-output stream)
+    (set-hand name (append cards (get-hand name)))))
+
 (defun sort-cards (cards)
   "Sort a card by type, then colour"
   (sort (sort cards #'cards-by-type-p) #'cards-by-colour-p))
@@ -161,7 +171,7 @@
     (setf *players* (remove name *players* :test #'equal)))
   (remhash name *hands*))
 
-(defun play-card (name card)
+(defun play-card (name card &keyword (stream nil))
   "Plays the card from the player's hand and apply side effects"
   (let ((hand-length (if name (length (get-hand name)) 0))
 	(new-hand (when name (remove card (get-hand name) :test #'equal))))
@@ -176,12 +186,14 @@
 	((equal (car card) "draw2")
 	 (progn
 	   (let ((player (if name (cadr *players*) (car *players*))))
-	     (set-hand player (draw-n-cards (get-hand player) 2))
+	     (draw-n-cards-and-print player 2 :stream stream)
 	     (next-turn))))
 	((equal (car card) "skip")
 	 (next-turn))
 	((equal (car card) "reverse")
 	 (reverse-order)))
+      (format stream "~a played ~a" (car *players*) (card-to-string card))
+      (force-output stream)
       (when (not (equal (car card) "reverse"))
 	(next-turn))
       (setf *top-card* card))))
