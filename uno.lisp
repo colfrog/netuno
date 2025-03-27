@@ -101,7 +101,7 @@
      (draw-card)
      (draw-n-cards (1- n)))))
 
-(defun draw-n-cards-and-print (name n &keyword (stream nil))
+(defun draw-n-cards-and-print (name n &key (stream nil))
   "Draws n cards, prints them and adds them to the hand"
   (let ((cards (draw-n-cards n)))
     (format stream "You drew: ")
@@ -122,9 +122,9 @@
 (defun next-turn ()
   "Choose the next player"
   (with-lock-held (*players-lock*)
-    (let ((player (pop *players*)))
-      (print player)
-      (setf *players* (append *players* (list player))))))
+    (when *players*
+      (let ((player (pop *players*)))
+	(setf *players* (append *players* (list player)))))))
 
 (defun reverse-order ()
   "Reverse the order, this should be called instead of next-turn after a reverse card"
@@ -162,7 +162,7 @@
     (init-game))
   (with-lock-held (*players-lock*)
     (setf *players* (append *players* (list name))))
-  (set-hand name (draw-n-cards '() 7))
+  (set-hand name (draw-n-cards 7))
   (sort-hand name))
 
 (defun remove-player (name)
@@ -171,7 +171,7 @@
     (setf *players* (remove name *players* :test #'equal)))
   (remhash name *hands*))
 
-(defun play-card (name card &keyword (stream nil))
+(defun play-card (name card &key (stream nil))
   "Plays the card from the player's hand and apply side effects"
   (let ((hand-length (if name (length (get-hand name)) 0))
 	(new-hand (when name (remove card (get-hand name) :test #'equal))))

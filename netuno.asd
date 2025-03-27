@@ -7,4 +7,4 @@
   :components ((:file "package")
 	       (:file "uno")
 	       (:file "server"))
-  :depends-on (#:usocket #:bordeaux-threads))
+  :depends-on (#:usocket #:bordeaux-threads #:cl-ppcre))
