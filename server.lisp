@@ -121,7 +121,7 @@
 (defun challenge (predicate)
   (when *challenge*
     (let ((player-conn (gethash (cadr *challenge*) *player-conns*))
-	  (challenger-conn (gethash (cadr *challenge*) *player-conns*)))
+	  (challenger-conn (gethash (caddr *challenge*) *player-conns*)))
       (if predicate
 	  (progn
 	    (maphash (lambda (conn name)
@@ -138,7 +138,7 @@
 			     (format (socket-stream conn) "The challenge failed!~%")
 			     (force-output (socket-stream conn)))
 			   *connections*)
-		  (draw-n-cards-and-print (caddr *challenge*) 6 :stream challenger-conn)
+		  (draw-n-cards-and-print (caddr *challenge*) 6 :stream (socket-stream challenger-conn))
 		  (next-turn))
 		(progn
 		  (maphash (lambda (conn name)
@@ -146,9 +146,9 @@
 			     (format (socket-stream conn) "The challenge succeeds!~%")
 			     (force-output (socket-stream conn)))
 			   *connections*)
-		  (draw-n-cards-and-print (cadr *challenge*) 4 :stream player-conn))))
+		  (draw-n-cards-and-print (cadr *challenge*) 4 :stream (socket-stream player-conn)))))
 	  (progn
-	    (draw-n-cards-and-print (caddr *challenge*) 4 :stream challenger-conn)
+	    (draw-n-cards-and-print (caddr *challenge*) 4 :stream (socket-stream challenger-conn))
 	    (next-turn)))
       (setf *challenge* nil)
       (announce-turn))))
