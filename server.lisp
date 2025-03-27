@@ -106,10 +106,10 @@
 
 (defun set-wildcard-color (color-arg)
   (let ((color (find-if (lambda (color) (equal (aref color 0) (aref color-arg 0))) *colors*)))
-    (setf (cdr *top-card*) color)))
+    (setf *top-card* (cons (car *top-card*) color))))
 
 (defun can-play-draw4 (hand top-card)
-  (not (null (find-if (lambda (card) (equal (cdr card) (cdr top-card))) hand))))
+  (null (find-if (lambda (card) (equal (cdr card) (cdr top-card))) hand)))
 
 (defun handle-draw4 (can-play player)
   (let* ((challenger (car *players*))
@@ -160,9 +160,9 @@
 	((or (null line) (and (>= (length line) 4) (equal (subseq line 0 4) "quit")))
 	 nil)
       (let* ((words (cadr (multiple-value-list (scan-to-strings *command-parser* line))))
-	     (command (when (aref words 0) (string-downcase (aref words 0))))
-	     (card-number (when (aref words 1) (parse-integer (aref words 1))))
-	     (color-arg (when (aref words 2) (string-downcase (aref words 2)))))
+	     (command (when (and words (aref words 0)) (string-downcase (aref words 0))))
+	     (card-number (when (and words (aref words 1)) (1- (parse-integer (aref words 1)))))
+	     (color-arg (when (and words (aref words 2)) (string-downcase (aref words 2)))))
 	(cond
 	  ((and (> (length line) 5) (equal (subseq line 0 4) "say "))
 	   (maphash (lambda (c n)
@@ -182,8 +182,27 @@
 	   (challenge t))
 	  ((equal command "n")
 	   (challenge nil))
+	  ((equal command "draw")
+	   (cond
+	     (*challenge*
+	      (format (socket-stream conn) "A challenge is ongoing~%")
+	      (force-output (socket-stream conn)))
+	     ((not (equal (current-player) name))
+	      (format (socket-stream conn) "It's not your turn!~%")
+	      (force-output (socket-stream conn)))
+	     (t
+	      (maphash (lambda (conn n)
+			 (declare (ignore n))
+			 (format (socket-stream conn) "~a draws a card~%" name)
+			 (force-output (socket-stream conn)))
+		       *connections*)
+	      (draw-n-cards-and-print name 1 :stream (socket-stream conn))
+	      (announce-turn))))
 	  ((equal command "play")
-	   (when (null *challenge*)
+	   (if *challenge*
+	       (progn
+		 (format (socket-stream conn) "A challenge is ongoing~%")
+		 (force-output (socket-stream conn)))
 	     (if (= (length *players*) 1)
 		 (progn
 		   (format (socket-stream conn) "Wait until there are at least 2 players~%")
@@ -215,12 +234,18 @@
 			 (t
 			  (let ((old-top-card *top-card*))
 			    (play-card name card :stream (socket-stream conn))
+			    (maphash (lambda (conn n)
+				       (declare (ignore n))
+				       (format (socket-stream conn) "~a played ~a~%" name (card-to-string card))
+				       (force-output (socket-stream conn)))
+				     *connections*)
 			    (let ((type (car *top-card*)))
 			      (cond ((equal type "draw4")
 				     (set-wildcard-color color-arg)
 				     (handle-draw4 (can-play-draw4 (get-hand name) old-top-card) name))
-				    ((equal type "change-color")
-				     (set-wildcard-color color-arg))
+				    ((equal type "change color")
+				     (set-wildcard-color color-arg)
+				     (announce-turn))
 				    (t (announce-turn))))))))))))
 	  (t
 	   (progn
@@ -247,6 +272,7 @@
   (setf *connections* (make-hash-table :test 'equal))
   (setf *player-conns* (make-hash-table :test 'equal))
   (setf *players* '())
+  (setf *challenge* nil)
   (socket-close *socket*)
   (destroy-thread *listen-thread*)
   (setf *listen-thread* nil)
