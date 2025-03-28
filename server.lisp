@@ -58,7 +58,7 @@
   (let ((winner (find-if #'is-winner *players*)))
     (if winner
 	(progn
-	  (reset-game)
+	  (reset-game winner)
 	  (maphash (lambda (conn name)
 		     (format (socket-stream conn) "~a wins!~c~%" winner #\Return)
 		     (format (socket-stream conn) "Starting new game~c~%" #\Return)

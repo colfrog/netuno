@@ -69,10 +69,14 @@
   (init-deck)
   (init-top-card))
 
-(defun reset-game ()
+(defun reset-game (winner)
   (init-game)
-  (dolist (player *players*)
-    (set-hand player (draw-n-cards 7))))
+  (with-lock-held (*players-lock*)
+    (do ((player (current-player) (current-player)))
+	((or (equal player winner) (null (find winner *players* :test 'equal))) t)
+      (next-turn))
+    (dolist (player *players*)
+      (set-hand player (draw-n-cards 7)))))
 
 (defun card-playable-p (card top-card)
   "Whether this card is playable on the top card"
@@ -182,7 +186,7 @@
 (defun play-card (name card &key (player-conns nil))
   "Plays the card from the player's hand and apply side effects"
   (let ((hand-length (if name (length (get-hand name)) 0))
-	(new-hand (when name (remove card (get-hand name) :test #'equal))))
+	(new-hand (when name (remove card (get-hand name) :test #'equal :count 1))))
     (when (or (null name)
 	      (and (card-playable-p card *top-card*)
 		   (< (length new-hand) hand-length)))
