@@ -107,7 +107,7 @@
     (format stream "You drew: ")
     (dolist (card cards)
       (format stream "~a " (card-to-string card)))
-    (format stream "~%")
+    (format stream "~C~%" #\return)
     (force-output stream)
     (set-hand name (append cards (get-hand name)))))
 
