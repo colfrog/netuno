@@ -1,6 +1,6 @@
 (in-package :netuno)
 
-(defvar *address* "10.0.0.74")
+(defvar *address* "localhost")
 (defvar *port* 11111)
 (defvar *listen-thread* nil)
 (defvar *socket* nil)
@@ -10,7 +10,7 @@
 (defvar *command-parser* (create-scanner "(\\w+)\\s*(\\d+)?\\s*(\\w+)?"))
 
 (defun show-players-conn (conn)
-  (format (socket-stream conn) "List of players: ~{~A~^, ~}~c~%" *players* #\Return)
+  (format (socket-stream conn) "List of players: ~{~a~^, ~}~c~%" (mapcar (lambda (player) (format nil "~a:~d" player (length (get-hand player)))) *players*) #\Return)
   (force-output (socket-stream conn)))
 
 (defun show-players (name)
@@ -203,7 +203,7 @@
 		 (format (socket-stream conn) "You have more than one card!~c~%" #\Return)
 		 (force-output (socket-stream conn)))
 	       (progn
-		 (setf (gethash *uno* name) t)
+		 (setf (gethash name *uno*) t)
 		 (maphash (lambda (conn n)
 			    (declare (ignore n))
 			    (format (socket-stream conn) "~a calls uno!~c~%" name #\Return)
@@ -224,6 +224,7 @@
 			 (force-output (socket-stream conn)))
 		       *connections*)
 	      (draw-n-cards-and-print name 1 :stream (socket-stream conn))
+	      (next-turn)
 	      (announce-turn))))
 	  ((equal command "play")
 	   (if *challenge*
@@ -260,7 +261,7 @@
 			  (force-output (socket-stream conn)))
 			 (t
 			  (let ((old-top-card *top-card*))
-			    (play-card name card :stream (socket-stream conn))
+			    (play-card name card :player-conns *player-conns*)
 			    (maphash (lambda (conn n)
 				       (declare (ignore n))
 				       (format (socket-stream conn) "~a played ~a~c~%" name (card-to-string card) #\Return)

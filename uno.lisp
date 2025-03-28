@@ -107,20 +107,21 @@
      (draw-card)
      (draw-n-cards (1- n)))))
 
-(defun draw-n-cards-and-print (name n &key (stream nil))
-  "Draws n cards, prints them and adds them to the hand"
-  (let ((cards (draw-n-cards n)))
-    (format stream "You drew: ")
-    (dolist (card cards)
-      (format stream "~a " (card-to-string card)))
-    (format stream "~c~%" #\Return)
-    (force-output stream)
-    (setf (gethash name *uno*) nil)
-    (set-hand name (append cards (get-hand name)))))
-
 (defun sort-cards (cards)
   "Sort a card by type, then colour"
   (sort (sort cards #'cards-by-type-p) #'cards-by-colour-p))
+
+(defun draw-n-cards-and-print (name n &key (stream nil))
+  "Draws n cards, prints them and adds them to the hand"
+  (let ((cards (draw-n-cards n)))
+    (when stream
+      (format stream "You drew: ")
+      (dolist (card cards)
+	(format stream "~a " (card-to-string card)))
+      (format stream "~c~%" #\Return)
+      (force-output stream))
+    (setf (gethash name *uno*) nil)
+    (set-hand name (sort-cards (append cards (get-hand name))))))
 
 (defun current-player ()
   "The player whose turn this is"
@@ -178,7 +179,7 @@
     (setf *players* (remove name *players* :test #'equal)))
   (remhash name *hands*))
 
-(defun play-card (name card &key (stream nil))
+(defun play-card (name card &key (player-conns nil))
   "Plays the card from the player's hand and apply side effects"
   (let ((hand-length (if name (length (get-hand name)) 0))
 	(new-hand (when name (remove card (get-hand name) :test #'equal))))
@@ -191,14 +192,14 @@
 	;; draw4 and change color require interaction with the user
 	;; and are left to the server
 	((equal (car card) "draw2")
-	 (progn
-	   (let ((player (if name (cadr *players*) (car *players*))))
-	     (draw-n-cards-and-print player 2 :stream stream)
-	     (next-turn))))
+	 (let* ((player (if name (cadr *players*) (car *players*)))
+		(conn (when player-conns (gethash player player-conns))))
+	   (draw-n-cards-and-print player 2 :stream (when conn (socket-stream conn)))
+	   (next-turn)))
 	((equal (car card) "skip")
 	 (next-turn))
 	((equal (car card) "reverse")
 	 (reverse-order)))
-      (when (not (equal (car card) "reverse"))
+      (when (or (= (length *players*) 2) (not (equal (car card) "reverse")))
 	(next-turn))
       (setf *top-card* card))))
