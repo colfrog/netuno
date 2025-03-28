@@ -4,6 +4,7 @@
 (defvar *players* '())
 (defvar *players-lock* (make-lock))
 (defvar *hands* (make-hash-table :test 'equal))
+(defvar *uno* (make-hash-table :test 'equal))
 (defvar *deck* '())
 (defvar *top-card* nil)
 
@@ -68,6 +69,11 @@
   (init-deck)
   (init-top-card))
 
+(defun reset-game ()
+  (init-game)
+  (dolist (player *players*)
+    (set-hand player (draw-n-cards 7))))
+
 (defun card-playable-p (card top-card)
   "Whether this card is playable on the top card"
   (or (equal (cdr card) "any")
@@ -107,8 +113,9 @@
     (format stream "You drew: ")
     (dolist (card cards)
       (format stream "~a " (card-to-string card)))
-    (format stream "~C~%" #\return)
+    (format stream "~c~%" #\Return)
     (force-output stream)
+    (setf (gethash name *uno*) nil)
     (set-hand name (append cards (get-hand name)))))
 
 (defun sort-cards (cards)

@@ -10,7 +10,7 @@
 (defvar *command-parser* (create-scanner "(\\w+)\\s*(\\d+)?\\s*(\\w+)?"))
 
 (defun show-players-conn (conn)
-  (format (socket-stream conn) "List of players: ~{~A~^, ~}~C~%" *players* #\return)
+  (format (socket-stream conn) "List of players: ~{~A~^, ~}~c~%" *players* #\Return)
   (force-output (socket-stream conn)))
 
 (defun show-players (name)
@@ -20,14 +20,14 @@
 (defun show-player-hand (name)
   (let ((conn (gethash name *player-conns*)))
     (when conn
-      (format (socket-stream conn) "Your hand: ~a~C~%"
-	      (hand-to-string (get-hand name)) #\return)
+      (format (socket-stream conn) "Your hand: ~a~c~%"
+	      (hand-to-string (get-hand name)) #\Return)
       (force-output (socket-stream conn)))))
 
 (defun show-top-card (&optional (name nil))
   (flet ((show-top-card-conn (c)
-	   (format (socket-stream c) "Top card is: ~a~C~%"
-		   (card-to-string *top-card*) #\return)
+	   (format (socket-stream c) "Top card is: ~a~c~%"
+		   (card-to-string *top-card*) #\Return)
 	   (force-output (socket-stream c))))
 
     (if name
@@ -41,8 +41,8 @@
 (defun show-current-turn (&optional (name nil))
   (flet ((show-current-turn-conn (c n)
 	   (if (equal n (current-player))
-	       (format (socket-stream c) "It's your turn~C~%" #\return)
-	       (format (socket-stream c) "It's ~a's turn~C~%" (current-player) #\return))
+	       (format (socket-stream c) "It's your turn~c~%" #\Return)
+	       (format (socket-stream c) "It's ~a's turn~c~%" (current-player) #\Return))
 	   (force-output (socket-stream c))))
     (if name
 	(let ((conn (gethash name *player-conns*)))
@@ -51,11 +51,26 @@
 		   (show-current-turn-conn c n))
 		 *connections*))))
 
+(defun is-winner (player)
+  (and (= (length (get-hand player)) 0) (gethash player *uno*)))
+
 (defun announce-turn ()
-  (let ((name (current-player)))
-    (show-current-turn)
-    (show-top-card)
-    (show-player-hand name)))
+  (let ((winner (find-if #'is-winner *players*)))
+    (if winner
+	(progn
+	  (reset-game)
+	  (maphash (lambda (conn name)
+		     (format (socket-stream conn) "~a wins!~c~%" winner #\Return)
+		     (format (socket-stream conn) "Starting new game~c~%" #\Return)
+		     (show-player-hand name)
+		     (show-top-card name)
+		     (show-current-turn name)
+		     (force-output (socket-stream conn)))
+		   *connections*))
+	(let ((name (current-player)))
+	  (show-current-turn)
+	  (show-top-card)
+	  (show-player-hand name)))))
 
 (defun get-connection-line (conn)
   (handler-case
@@ -67,13 +82,13 @@
 
 (defun init-connection (conn)
   (show-players-conn conn)
-  (format (socket-stream conn) "Please choose a nickname:~C~%" #\return)
+  (format (socket-stream conn) "Please choose a nickname:~c~%" #\Return)
   (force-output (socket-stream conn))
   (let* ((name (get-connection-line conn)))
     (when name
       (if (not (null (gethash name *player-conns*)))
 	  (progn
-	    (format (socket-stream conn) "Nickname already taken.~C~%" #\return)
+	    (format (socket-stream conn) "Nickname already taken.~c~%" #\Return)
 	    (force-output (socket-stream conn))
 	    (setf name (init-connection conn)))
 	  (progn
@@ -81,7 +96,7 @@
 	    (setf (gethash name *player-conns*) conn)
 	    (maphash (lambda (c n)
 		       (declare (ignore n))
-		       (format (socket-stream c) "~a has joined the game~C~%" name #\return)
+		       (format (socket-stream c) "~a has joined the game~c~%" name #\Return)
 		       (force-output (socket-stream c)))
 		     *connections*)
 	    (force-output (socket-stream conn))
@@ -99,7 +114,7 @@
     (remhash name *player-conns*)
     (maphash (lambda (c n)
 	       (declare (ignore n))
-	       (format (socket-stream c) "~a has left~C~%" name #\return)
+	       (format (socket-stream c) "~a has left~c~%" name #\Return)
 	       (force-output (socket-stream c)))
 	     *connections*))
   (socket-close conn))
@@ -114,7 +129,7 @@
 (defun handle-draw4 (can-play player)
   (let* ((challenger (car *players*))
 	 (challenger-conn (gethash challenger *player-conns*)))
-    (format (socket-stream challenger-conn) "Would you like to challenge the draw4?~C~%" #\return)
+    (format (socket-stream challenger-conn) "Would you like to challenge the draw4?~c~%" #\Return)
     (force-output (socket-stream challenger-conn))
     (setf *challenge* (list can-play player challenger))))
 
@@ -126,16 +141,16 @@
 	  (progn
 	    (maphash (lambda (conn name)
 		       (declare (ignore name))
-		       (format (socket-stream conn) "~a challenges ~a on their draw4~C~%" (caddr *challenge*) (cadr *challenge*) #\return)
+		       (format (socket-stream conn) "~a challenges ~a on their draw4~c~%" (caddr *challenge*) (cadr *challenge*) #\Return)
 		       (force-output (socket-stream conn)))
 		     *connections*)
-	    (format (socket-stream challenger-conn) "~a's hand: ~a~C~%" (cadr *challenge*) (hand-to-string (get-hand (cadr *challenge*))) #\return)
+	    (format (socket-stream challenger-conn) "~a's hand: ~a~c~%" (cadr *challenge*) (hand-to-string (get-hand (cadr *challenge*))) #\Return)
 	    (force-output (socket-stream challenger-conn))
 	    (if (car *challenge*)
 		(progn
 		  (maphash (lambda (conn name)
 			     (declare (ignore name))
-			     (format (socket-stream conn) "The challenge failed!~C~%" #\return)
+			     (format (socket-stream conn) "The challenge failed!~c~%" #\Return)
 			     (force-output (socket-stream conn)))
 			   *connections*)
 		  (draw-n-cards-and-print (caddr *challenge*) 6 :stream (socket-stream challenger-conn))
@@ -143,7 +158,7 @@
 		(progn
 		  (maphash (lambda (conn name)
 			     (declare (ignore name))
-			     (format (socket-stream conn) "The challenge succeeds!~C~%" #\return)
+			     (format (socket-stream conn) "The challenge succeeds!~c~%" #\Return)
 			     (force-output (socket-stream conn)))
 			   *connections*)
 		  (draw-n-cards-and-print (cadr *challenge*) 4 :stream (socket-stream player-conn)))))
@@ -167,7 +182,7 @@
 	  ((and (> (length line) 5) (equal (subseq line 0 4) "say "))
 	   (maphash (lambda (c n)
 		      (declare (ignore n))
-		      (format (socket-stream c) "~a: ~a~C~%" name (subseq line 4 (length line)) #\return)
+		      (format (socket-stream c) "~a: ~a~c~%" name (subseq line 4 (length line)) #\Return)
 		      (force-output (socket-stream c)))
 		    *connections*))
 	  ((equal command "players")
@@ -182,18 +197,30 @@
 	   (challenge t))
 	  ((equal command "n")
 	   (challenge nil))
+	  ((equal command "uno")
+	   (if (/= (length (get-hand name)) 1)
+	       (progn
+		 (format (socket-stream conn) "You have more than one card!~c~%" #\Return)
+		 (force-output (socket-stream conn)))
+	       (progn
+		 (setf (gethash *uno* name) t)
+		 (maphash (lambda (conn n)
+			    (declare (ignore n))
+			    (format (socket-stream conn) "~a calls uno!~c~%" name #\Return)
+			    (force-output (socket-stream conn)))
+			  *connections*))))
 	  ((equal command "draw")
 	   (cond
 	     (*challenge*
-	      (format (socket-stream conn) "A challenge is ongoing~C~%" #\return)
+	      (format (socket-stream conn) "A challenge is ongoing~c~%" #\Return)
 	      (force-output (socket-stream conn)))
 	     ((not (equal (current-player) name))
-	      (format (socket-stream conn) "It's not your turn!~C~%" #\return)
+	      (format (socket-stream conn) "It's not your turn!~c~%" #\Return)
 	      (force-output (socket-stream conn)))
 	     (t
 	      (maphash (lambda (conn n)
 			 (declare (ignore n))
-			 (format (socket-stream conn) "~a draws a card~C~%" name #\return)
+			 (format (socket-stream conn) "~a draws a card~c~%" name #\Return)
 			 (force-output (socket-stream conn)))
 		       *connections*)
 	      (draw-n-cards-and-print name 1 :stream (socket-stream conn))
@@ -201,44 +228,48 @@
 	  ((equal command "play")
 	   (if *challenge*
 	       (progn
-		 (format (socket-stream conn) "A challenge is ongoing~C~%" #\return)
+		 (format (socket-stream conn) "A challenge is ongoing~c~%" #\Return)
 		 (force-output (socket-stream conn)))
 	     (if (= (length *players*) 1)
 		 (progn
-		   (format (socket-stream conn) "Wait until there are at least 2 players~C~%" #\return)
+		   (format (socket-stream conn) "Wait until there are at least 2 players~c~%" #\Return)
 		   (force-output (socket-stream conn)))
 		 (let ((card (when card-number
 			       (let ((hand (get-hand name)))
 				 (if (or (< card-number 0) (>= card-number (length hand)))
 				     (progn
-				       (format (socket-stream conn) "Invalid card number~C~%" #\return)
+				       (format (socket-stream conn) "Invalid card number~c~%" #\Return)
 				       (force-output (socket-stream conn)))
 				     (nth card-number hand))))))
 		   (if (not card)
 		       (progn
-			 (format (socket-stream conn) "Please enter a card number. Use the \"hand\" command to see them~C~%" #\return)
+			 (format (socket-stream conn) "Please enter a card number. Use the \"hand\" command to see them~c~%" #\Return)
 			 (force-output (socket-stream conn)))
 		       (cond
 			 ((not (equal (current-player) name))
-			  (format (socket-stream conn) "It's not your turn!~C~%" #\return)
+			  (format (socket-stream conn) "It's not your turn!~c~%" #\Return)
 			  (force-output (socket-stream conn)))
 			 ((not (card-playable-p card *top-card*))
-			  (format (socket-stream conn) "You can't play a ~a on a ~a~C~%"
-				  (card-to-string card) (card-to-string *top-card*) #\return)
+			  (format (socket-stream conn) "You can't play a ~a on a ~a~c~%"
+				  (card-to-string card) (card-to-string *top-card*) #\Return)
 			  (force-output (socket-stream conn)))
 			 ((and (or (equal (car card) "draw4") (equal (car card) "change color"))
 			       (or (null color-arg)
 				   (null (find-if (lambda (color) (equal (aref color-arg 0) (aref color 0))) *colors*))))
-			  (format (socket-stream conn) "Please enter a color after the card number when playing a wild card~C~%" #\return)
+			  (format (socket-stream conn) "Please enter a color after the card number when playing a wild card~c~%" #\Return)
 			  (force-output (socket-stream conn)))
 			 (t
 			  (let ((old-top-card *top-card*))
 			    (play-card name card :stream (socket-stream conn))
 			    (maphash (lambda (conn n)
 				       (declare (ignore n))
-				       (format (socket-stream conn) "~a played ~a~C~%" name (card-to-string card) #\return)
+				       (format (socket-stream conn) "~a played ~a~c~%" name (card-to-string card) #\Return)
 				       (force-output (socket-stream conn)))
 				     *connections*)
+			    (when (and (= (length (get-hand name)) 0) (null (gethash name *uno*)))
+			      (format (socket-stream conn) "You didn't call uno!~c~%" #\Return)
+			      (force-output (socket-stream conn))
+			      (draw-n-cards-and-print name 1 :stream (socket-stream conn)))
 			    (let ((type (car *top-card*)))
 			      (cond ((equal type "draw4")
 				     (set-wildcard-color color-arg)
@@ -249,7 +280,7 @@
 				    (t (announce-turn))))))))))))
 	  (t
 	   (progn
-	     (format (socket-stream conn) "~a~C~%" line #\return)
+	     (format (socket-stream conn) "~a~c~%" line #\Return)
 	     (force-output (socket-stream conn)))))))
       (deinit-connection conn name)))
 
