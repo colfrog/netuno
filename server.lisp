@@ -314,19 +314,21 @@
 	   (progn
 	     (format (socket-stream conn) "~a~c~%" line #\Return)
 	     (force-output (socket-stream conn)))))))
-      (deinit-connection conn name)))
+    (deinit-connection conn name)))
 
 (defun accept-connections (sock)
   (do ((ready-socket (wait-for-input sock :timeout 5 :ready-only t)
 		     (wait-for-input sock :timeout 5 :ready-only t)))
       (nil nil)
     (when ready-socket
-      (let ((conn (socket-accept (car ready-socket) :element-type 'character)))
+      (let ((conn (socket-accept (car ready-socket) :element-type 'extended-char)))
 	(make-thread (lambda () (handle-connection conn)))))
     (maphash (lambda (name thread)
 	       (when (not (thread-alive-p thread))
-		   (deinit-connection (gethash name *player-conns*) name)))
-	     *player-threads*)))
+		 (deinit-connection (gethash name *player-conns*) name)))
+	     *player-threads*)
+    (with-lock-held (*players-lock*)
+      (setf *players* (remove-if (lambda (player) (null (gethash player *player-threads*))) *players*)))))
 
 (defun start-netuno ()
   (let* ((socket (socket-listen *address* *port*)))
