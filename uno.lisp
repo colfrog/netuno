@@ -81,7 +81,7 @@
       ((or (equal player winner) (null (find winner *players* :test 'equal))) t)
     (next-turn))
   (dolist (player *players*)
-    (set-hand player (draw-n-cards 7))))
+    (set-hand player (sort-cards (draw-n-cards 7)))))
 
 (defun card-playable-p (card top-card)
   "Whether this card is playable on the top card"
