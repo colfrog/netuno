@@ -126,10 +126,9 @@
   "Draws n cards, prints them and adds them to the hand"
   (let ((cards (draw-n-cards n)))
     (when (and conn send-message)
-      (funcall send-message conn "You drew: ")
+      (funcall send-message conn "You drew:")
       (dolist (card cards)
-	(funcall send-message conn (format nil "~a " (card-to-string card))))
-      (funcall send-message conn (format nil "~c~%" #\Return)))
+	(funcall send-message conn (format nil "~a" (card-to-string card)))))
     (setf (gethash name *uno*) nil)
     (set-hand name (sort-cards (append cards (get-hand name))))
     cards))

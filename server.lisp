@@ -12,13 +12,16 @@
 (defvar *command-parser* (create-scanner "(\\w+)\\s*(\\d+)?\\s*(\\w+)?"))
 
 (defun send-message (conn string)
-  (let ((bytes (flexi-streams:string-to-octets string)))
+  (let ((bytes (flexi-streams:string-to-octets string))
+	(crlf (flexi-streams:string-to-octets (format nil "~c~c" #\Return #\Linefeed))))
     (dotimes (i (length bytes))
       (write-byte (aref bytes i) (socket-stream conn)))
+    (dotimes (i (length crlf))
+      (write-byte (aref crlf i) (socket-stream conn)))
     (force-output (socket-stream conn))))
 
 (defun show-players-conn (conn)
-  (send-message conn (format nil "List of players: ~{~a~^, ~}~c~%" (mapcar (lambda (player) (format nil "~a:~d" player (length (get-hand player)))) *players*) #\Return)))
+  (send-message conn (format nil "List of players: ~{~a~^, ~}" (mapcar (lambda (player) (format nil "~a:~d" player (length (get-hand player)))) *players*))))
 
 (defun show-players (name)
   (let ((conn (gethash name *player-conns*)))
@@ -27,14 +30,14 @@
 (defun show-player-hand (name)
   (let ((conn (gethash name *player-conns*)))
     (when conn
-      (send-message conn (format nil "Your hand: ~a~c~%"
-				 (hand-to-string (get-hand name)) #\Return)))))
+      (send-message conn (format nil "Your hand: ~a"
+				 (hand-to-string (get-hand name)))))))
 
 (defun show-top-card (&optional (name nil))
   (flet ((show-top-card-conn (c)
 	   (send-message c
-	   (format nil "Top card is: ~a~c~%"
-		   (card-to-string *top-card*) #\Return))))
+	   (format nil "Top card is: ~a"
+		   (card-to-string *top-card*)))))
 
     (if name
 	(let ((conn (gethash name *player-conns*)))
@@ -47,8 +50,8 @@
 (defun show-current-turn (&optional (name nil))
   (flet ((show-current-turn-conn (c n)
 	   (if (equal n (current-player))
-	       (send-message c (format nil "It's your turn~c~%" #\Return))
-	       (send-message c (format nil "It's ~a's turn~c~%" (current-player) #\Return)))))
+	       (send-message c "It's your turn")
+	       (send-message c (format nil "It's ~a's turn" (current-player))))))
     (if name
 	(let ((conn (gethash name *player-conns*)))
 	  (show-current-turn-conn conn name))
@@ -65,8 +68,8 @@
 	(progn
 	  (reset-game winner)
 	  (maphash (lambda (conn name)
-		     (send-message conn (format nil "~a wins!~c~%" winner #\Return))
-		     (send-message conn (format nil "Starting new game~c~%" #\Return))
+		     (send-message conn (format nil "~a wins!" winner))
+		     (send-message conn "Starting new game")
 		     (show-player-hand name)
 		     (show-top-card name)
 		     (show-current-turn name))
@@ -96,12 +99,12 @@
 
 (defun init-connection (conn)
   (show-players-conn conn)
-  (send-message conn (format nil "Please choose a nickname:~c~%" #\Return))
+  (send-message conn "Please choose a nickname:")
   (let ((name (get-connection-line conn)))
     (when name
       (if (not (null (gethash name *player-conns*)))
 	  (progn
-	    (send-message conn (format nil "Nickname already taken.~c~%" #\Return))
+	    (send-message conn "Nickname already taken.")
 	    (setf name (init-connection conn)))
 	  (progn
 	    (setf (gethash name *player-threads*) (current-thread))
@@ -109,13 +112,13 @@
 	    (setf (gethash name *player-conns*) conn)
 	    (maphash (lambda (c n)
 		       (declare (ignore n))
-		       (send-message c (format nil "~a has joined the game~c~%" name #\Return)))
+		       (send-message c (format nil "~a has joined the game" name)))
 		     *connections*)
 	    (add-player name)
 	    (show-player-hand name)
 	    (show-current-turn name)
 	    (show-top-card name)
-	    (send-message conn (format nil "This is a text-based game. Enter \"help\" for help on the commands.~c~%" #\Return)))))
+	    (send-message conn "This is a text-based game. Enter \"help\" for help on the commands."))))
     name))
 
 (defun deinit-connection (conn name)
@@ -126,7 +129,7 @@
     (remhash name *player-threads*)
     (maphash (lambda (c n)
 	       (declare (ignore n))
-	       (send-message c (format nil "~a has left~c~%" name #\Return)))
+	       (send-message c (format nil "~a has left" name)))
 	     *connections*))
   (socket-close conn))
 
@@ -140,7 +143,7 @@
 (defun handle-draw4 (can-play player)
   (let* ((challenger (car *players*))
 	 (challenger-conn (gethash challenger *player-conns*)))
-    (send-message challenger-conn (format nil "Would you like to challenge the draw4? (y/n)~c~%" #\Return))
+    (send-message challenger-conn "Would you like to challenge the draw4? (y/n)")
     (setf *challenge* (list can-play player challenger))))
 
 (defun challenge (predicate)
@@ -151,21 +154,21 @@
 	  (progn
 	    (maphash (lambda (conn name)
 		       (declare (ignore name))
-		       (send-message conn (format nil "~a challenges ~a on their draw4~c~%" (caddr *challenge*) (cadr *challenge*) #\Return)))
+		       (send-message conn (format nil "~a challenges ~a on their draw4" (caddr *challenge*) (cadr *challenge*))))
 		     *connections*)
-	    (send-message challenger-conn (format nil "~a's hand: ~a~c~%" (cadr *challenge*) (hand-to-string (get-hand (cadr *challenge*))) #\Return))
+	    (send-message challenger-conn (format nil "~a's hand: ~a" (cadr *challenge*) (hand-to-string (get-hand (cadr *challenge*)))))
 	    (if (car *challenge*)
 		(progn
 		  (maphash (lambda (conn name)
 			     (declare (ignore name))
-			     (send-message conn (format nil "The challenge failed!~c~%" #\Return)))
+			     (send-message conn "The challenge failed!"))
 			   *connections*)
 		  (draw-n-cards-and-print (caddr *challenge*) 6 :conn challenger-conn :send-message #'send-message)
 		  (next-turn))
 		(progn
 		  (maphash (lambda (conn name)
 			     (declare (ignore name))
-			     (send-message conn (format nil "The challenge succeeds!~c~%" #\Return)))
+			     (send-message conn "The challenge succeeds!"))
 			   *connections*)
 		  (draw-n-cards-and-print (cadr *challenge*) 4 :conn player-conn :send-message #'send-message))))
 	  (progn
@@ -187,18 +190,18 @@
 	(when command
 	  (cond
 	    ((equal command "help")
-	     (send-message conn (format nil "say <text>: Say something to the other players.~c~%" #\Return))
-	     (send-message conn (format nil "players: Print the list of players along with the number of cards in their hand.~c~%" #\Return))
-	     (send-message conn (format nil "hand: Show your hand.~c~%" #\Return))
-	     (send-message conn (format nil "top: Show the top card.~c~%" #\Return))
-	     (send-message conn (format nil "turn: Show whose turn it is.~c~%" #\Return))
-	     (send-message conn (format nil "play <card number> <color?>: Play the card identified by number from your hand. If it is a wild card, the color argument is required.~c~%" #\Return))
-	     (send-message conn (format nil "draw: Draw a card. If you can play the card, you have to play it after drawing it.~c~%" #\Return))
-	     (send-message conn (format nil "uno: Call uno if you have a single card.~c~%" #\Return)))
+	     (send-message conn "say <text>: Say something to the other players.")
+	     (send-message conn "players: Print the list of players along with the number of cards in their hand.")
+	     (send-message conn "hand: Show your hand.")
+	     (send-message conn "top: Show the top card.")
+	     (send-message conn "turn: Show whose turn it is.")
+	     (send-message conn "play <card number> <color?>: Play the card identified by number from your hand. If it is a wild card, the color argument is required.")
+	     (send-message conn "draw: Draw a card. If you can play the card, you have to play it after drawing it.")
+	     (send-message conn "uno: Call uno if you have a single card."))
 	    ((and (> (length line) 5) (equal (subseq line 0 4) "say "))
 	     (maphash (lambda (c n)
 			(declare (ignore n))
-			(send-message c (format nil "~a: ~a~c~%" name (subseq line 4 (length line)) #\Return)))
+			(send-message c (format nil "~a: ~a" name (subseq line 4 (length line)))))
 		      *connections*))
 	    ((equal command "players")
 	     (show-players name))
@@ -215,68 +218,68 @@
 	    ((equal command "uno")
 	     (if (/= (length (get-hand name)) 1)
 		 (progn
-		   (send-message conn (format nil "You have more than one card!~c~%" #\Return)))
+		   (send-message conn "You have more than one card!"))
 		 (progn
 		   (setf (gethash name *uno*) t)
 		   (maphash (lambda (conn n)
 			      (declare (ignore n))
-			      (send-message conn (format nil "~a calls uno!~c~%" name #\Return)))
+			      (send-message conn (format nil "~a calls uno!" name)))
 			    *connections*))))
 	    ((equal command "draw")
 	     (cond
 	       (*challenge*
-		(send-message conn (format nil "A challenge is ongoing~c~%" #\Return)))
+		(send-message conn "A challenge is ongoing"))
 	       ((not (equal (current-player) name))
-		(send-message conn (format nil "It's not your turn!~c~%" #\Return)))
+		(send-message conn "It's not your turn!"))
 	       (t
 		(maphash (lambda (conn n)
 			   (declare (ignore n))
-			   (send-message conn (format nil "~a draws a card~c~%" name #\Return)))
+			   (send-message conn (format nil "~a draws a card" name)))
 			 *connections*)
 		(let ((cards (draw-n-cards-and-print name 1 :conn conn :send-message #'send-message)))
 		  (if (card-playable-p (car cards) *top-card*)
 		      (progn
-			(send-message conn (format nil "You have to play this card.~c~%" #\Return))
+			(send-message conn "You have to play this card.")
 			(show-player-hand name))
 		      (progn
 			(next-turn)
 			(announce-turn)))))))
 	    ((equal command "play")
 	     (if *challenge*
-		 (send-message conn (format nil "A challenge is ongoing~c~%" #\Return))
+		 (send-message conn "A challenge is ongoing")
 		 (if (= (length *players*) 1)
-		     (send-message conn (format nil "Wait until there are at least 2 players~c~%" #\Return))
+		     (send-message conn "Wait until there are at least 2 players")
 		     (let ((card (when card-number
 				   (let ((hand (get-hand name)))
 				     (if (or (< card-number 0) (>= card-number (length hand)))
-					 (send-message conn (format nil "Invalid card number~c~%" #\Return))
+					 (send-message conn "Invalid card number")
 					 (nth card-number hand))))))
 		       (if (not card)
-			   (send-message conn (format nil "Please enter a card number. Use the \"hand\" command to see them~c~%" #\Return))
+			   (send-message conn "Please enter a card number. Use the \"hand\" command to see them.")
 			   (cond
 			     ((not (equal (current-player) name))
-			      (send-message conn (format nil "It's not your turn!~c~%" #\Return)))
+			      (send-message conn "It's not your turn!"))
 			     ((not (card-playable-p card *top-card*))
-			      (send-message conn (format nil "You can't play a ~a on a ~a~c~%"
-							 (card-to-string card) (card-to-string *top-card*) #\Return)))
+			      (send-message conn (format nil "You can't play a ~a on a ~a"
+							 (card-to-string card) (card-to-string *top-card*))))
 			     ((and (or (equal (car card) "draw4") (equal (car card) "change color"))
 				   (or (null color-arg)
 				       (null (find-if (lambda (color) (equal (aref color-arg 0) (aref color 0))) *colors*))))
-			      (send-message conn (format nil "Please enter a color after the card number when playing a wild card~c~%" #\Return)))
+			      (send-message conn "Please enter a color after the card number when playing a wild card."))
 			     ((and (gethash name *forced-card*) (not (equal (gethash name *forced-card*) card)))
-			      (send-message conn (format nil "You have to play a ~a~c~%" (card-to-string (gethash name *forced-card*)) #\Return)))
+			      (send-message conn (format nil "You have to play a ~a" (card-to-string (gethash name *forced-card*)))))
 			     (t
 			      (let ((old-top-card *top-card*))
 				(play-card name card :send-message #'send-message :player-conns *player-conns*)
 				(maphash (lambda (conn n)
 					   (declare (ignore n))
-					   (send-message conn (format nil "~a played ~a~c~%" name (card-to-string card) #\Return)))
+					   (send-message conn (format nil "~a played ~a" name (card-to-string card))))
 					 *connections*)
 				(when (and (= (length (get-hand name)) 0) (null (gethash name *uno*)))
-				  (send-message conn (format nil "You didn't call uno!~c~%" #\Return))
+				  (send-message conn "You didn't call uno!")
 				  (maphash (lambda (conn n)
 					     (when (not (equal n name))
-					       (send-message conn (format nil "~a didn't call uno!~c~%" name #\Return))))
+					       (send-message conn (format nil "~a didn't call uno!" name))))
 					   *connections*)
 				  (draw-n-cards-and-print name 1 :conn conn :send-message #'send-message))
 				(setf (gethash name *forced-card*) nil)
@@ -288,7 +291,7 @@
 					 (set-wildcard-color color-arg)
 					 (announce-turn))
 					(t (announce-turn))))))))))))
-	    (t (send-message conn (format nil "~a~c~%" line #\Return)))))))
+	    (t (send-message conn (format nil "~a" line)))))))
     (deinit-connection conn name)))
 
 (defun accept-connections (sock)
