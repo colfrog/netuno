@@ -1,6 +1,6 @@
 (in-package :netuno)
 
-(defvar *address* "localhost")
+(defvar *address* "46.23.95.107")
 (defvar *port* 11111)
 (defvar *socket* nil)
 (defvar *listen-thread* nil)
@@ -315,6 +315,9 @@
 	  (make-thread
 	   (lambda () (accept-connections socket))
 	   :name "listen-thread"))))
+
+(defun start-and-wait ()
+  (join-thread (start-netuno)))
 
 (defun stop-netuno ()
   (maphash (lambda (c name) (declare (ignore name)) (socket-close c)) *connections*)

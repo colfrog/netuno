@@ -10,4 +10,4 @@
   :depends-on (#:usocket #:bordeaux-threads #:cl-ppcre #:flexi-streams)
   :build-operation "program-op"
   :build-pathname "netuno"
-  :entry-point "netuno:start-netuno")
+  :entry-point "netuno:start-and-wait")
