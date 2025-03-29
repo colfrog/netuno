@@ -122,15 +122,14 @@
   "Sort a card by type, then colour"
   (sort (sort cards #'cards-by-type-p) #'cards-by-colour-p))
 
-(defun draw-n-cards-and-print (name n &key (stream nil))
+(defun draw-n-cards-and-print (name n &key (conn nil) (send-message nil))
   "Draws n cards, prints them and adds them to the hand"
   (let ((cards (draw-n-cards n)))
-    (when stream
-      (format stream "You drew: ")
+    (when (and conn send-message)
+      (funcall send-message conn "You drew: ")
       (dolist (card cards)
-	(format stream "~a " (card-to-string card)))
-      (format stream "~c~%" #\Return)
-      (force-output stream))
+	(funcall send-message conn (format nil "~a " (card-to-string card))))
+      (funcall send-message conn (format nil "~c~%" #\Return)))
     (setf (gethash name *uno*) nil)
     (set-hand name (sort-cards (append cards (get-hand name))))
     cards))
@@ -193,7 +192,7 @@
     (setf *players* (remove name *players* :test #'equal)))
   (remhash name *hands*))
 
-(defun play-card (name card &key (player-conns nil))
+(defun play-card (name card &key (player-conns nil) (send-message nil))
   "Plays the card from the player's hand and apply side effects"
   (let ((hand-length (if name (length (get-hand name)) 0))
 	(new-hand (when name (remove card (get-hand name) :test #'equal :count 1))))
@@ -208,7 +207,7 @@
 	((equal (car card) "draw2")
 	 (let* ((player (if name (cadr *players*) (car *players*)))
 		(conn (when player-conns (gethash player player-conns))))
-	   (draw-n-cards-and-print player 2 :stream (when conn (socket-stream conn)))
+	   (draw-n-cards-and-print player 2 :send-message send-message :conn (when conn (socket-stream conn)))
 	   (next-turn)))
 	((equal (car card) "skip")
 	 (next-turn))
