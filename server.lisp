@@ -79,13 +79,13 @@
 		   (read-line (socket-stream conn) nil))
     (error (err)
       (declare (ignore err))
-      "")))
+      nil)))
 
 (defun init-connection (conn)
   (show-players-conn conn)
   (format (socket-stream conn) "Please choose a nickname:~c~%" #\Return)
   (force-output (socket-stream conn))
-  (let* ((name (get-connection-line conn)))
+  (let ((name (get-connection-line conn)))
     (when name
       (if (not (null (gethash name *player-conns*)))
 	  (progn
@@ -280,6 +280,11 @@
 			    (when (and (= (length (get-hand name)) 0) (null (gethash name *uno*)))
 			      (format (socket-stream conn) "You didn't call uno!~c~%" #\Return)
 			      (force-output (socket-stream conn))
+			      (maphash (lambda (conn n)
+					 (when (not (equal n name))
+					   (format (socket-stream conn) "~a didn't call uno!~c~%" name #\Return)
+					   (force-output (socket-stream conn))))
+				       *connections*)
 			      (draw-n-cards-and-print name 1 :stream (socket-stream conn)))
 			    (setf (gethash name *forced-card*) nil)
 			    (let ((type (car *top-card*)))
