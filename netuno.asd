@@ -7,4 +7,7 @@
   :components ((:file "package")
 	       (:file "uno")
 	       (:file "server"))
-  :depends-on (#:usocket #:bordeaux-threads #:cl-ppcre #:flexi-streams))
+  :depends-on (#:usocket #:bordeaux-threads #:cl-ppcre #:flexi-streams)
+  :build-operation "program-op"
+  :build-pathname "netuno"
+  :entry-point "netuno:start-netuno")
