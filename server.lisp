@@ -77,10 +77,7 @@
 (defun get-connection-line (conn)
   (handler-case
       (string-trim '(#\newline #\return #\space)
-		   (read-line (socket-stream conn) nil))
-    (error (err)
-      (declare (ignore err))
-      nil)))
+		   (read-line (socket-stream conn) nil))))
 
 (defun init-connection (conn)
   (show-players-conn conn)

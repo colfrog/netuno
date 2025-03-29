@@ -8,6 +8,8 @@
 (defvar *deck* '())
 (defvar *top-card* nil)
 
+(setf sb-impl::*default-external-format* :utf-8)
+
 (defvar +color-codes+ (make-hash-table :test 'equal))
 (setf (gethash "red" +color-codes+) 91)
 (setf (gethash "yellow" +color-codes+) 93)
