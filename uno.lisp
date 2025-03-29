@@ -8,6 +8,12 @@
 (defvar *deck* '())
 (defvar *top-card* nil)
 
+(defvar +color-codes+ (make-hash-table :test 'equal))
+(setf (gethash "red" +color-codes+) 91)
+(setf (gethash "yellow" +color-codes+) 93)
+(setf (gethash "green" +color-codes+) 92)
+(setf (gethash "blue" +color-codes+) 94)
+
 (defun make-deck ()
   "Make a standard uno deck"
   (let ((deck '()))
@@ -125,7 +131,8 @@
       (format stream "~c~%" #\Return)
       (force-output stream))
     (setf (gethash name *uno*) nil)
-    (set-hand name (sort-cards (append cards (get-hand name))))))
+    (set-hand name (sort-cards (append cards (get-hand name))))
+    cards))
 
 (defun current-player ()
   "The player whose turn this is"
@@ -158,8 +165,10 @@
 (defun card-to-string (card)
   "Transform a card to a string"
   (if (equal (cdr card) "any")
-      (format nil "[~a]" (car card))
-      (format nil "[~a ~a]" (cdr card) (car card))))
+      (format nil "~c[95m[~a]~c[0m" #\Esc (car card) #\Esc)
+      (format nil "~c[~dm[~a ~a]~c[0m"
+	      #\Esc (gethash (cdr card) +color-codes+)
+	      (cdr card) (car card) #\Esc)))
 
 (defun hand-to-string (hand &optional (n 1))
   "Transform a hand to a string"

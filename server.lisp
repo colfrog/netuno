@@ -7,6 +7,7 @@
 (defvar *connections* (make-hash-table :test 'equal))
 (defvar *player-conns* (make-hash-table :test 'equal))
 (defvar *challenge* nil)
+(defvar *forced-card* (make-hash-table :test 'equal))
 (defvar *command-parser* (create-scanner "(\\w+)\\s*(\\d+)?\\s*(\\w+)?"))
 
 (defun show-players-conn (conn)
@@ -129,7 +130,7 @@
 (defun handle-draw4 (can-play player)
   (let* ((challenger (car *players*))
 	 (challenger-conn (gethash challenger *player-conns*)))
-    (format (socket-stream challenger-conn) "Would you like to challenge the draw4?~c~%" #\Return)
+    (format (socket-stream challenger-conn) "Would you like to challenge the draw4? (y/n)~c~%" #\Return)
     (force-output (socket-stream challenger-conn))
     (setf *challenge* (list can-play player challenger))))
 
@@ -223,9 +224,15 @@
 			 (format (socket-stream conn) "~a draws a card~c~%" name #\Return)
 			 (force-output (socket-stream conn)))
 		       *connections*)
-	      (draw-n-cards-and-print name 1 :stream (socket-stream conn))
-	      (next-turn)
-	      (announce-turn))))
+	      (let ((cards (draw-n-cards-and-print name 1 :stream (socket-stream conn))))
+		(if (card-playable-p (car cards) *top-card*)
+		    (progn
+		      (format (socket-stream conn) "You have to play this card.~c~%" #\Return)
+		      (show-player-hand name)
+		      (force-output (socket-stream conn)))
+		    (progn
+		      (next-turn)
+		      (announce-turn)))))))
 	  ((equal command "play")
 	   (if *challenge*
 	       (progn
@@ -259,6 +266,9 @@
 				   (null (find-if (lambda (color) (equal (aref color-arg 0) (aref color 0))) *colors*))))
 			  (format (socket-stream conn) "Please enter a color after the card number when playing a wild card~c~%" #\Return)
 			  (force-output (socket-stream conn)))
+			 ((and (gethash name *forced-card*) (not (equal (gethash name *forced-card*) card)))
+			  (format (socket-stream conn) "You have to play a ~a~c~%" (card-to-string (gethash name *forced-card*)) #\Return)
+			  (force-output (socket-stream conn)))
 			 (t
 			  (let ((old-top-card *top-card*))
 			    (play-card name card :player-conns *player-conns*)
@@ -271,6 +281,7 @@
 			      (format (socket-stream conn) "You didn't call uno!~c~%" #\Return)
 			      (force-output (socket-stream conn))
 			      (draw-n-cards-and-print name 1 :stream (socket-stream conn)))
+			    (setf (gethash name *forced-card*) nil)
 			    (let ((type (car *top-card*)))
 			      (cond ((equal type "draw4")
 				     (set-wildcard-color color-arg)
@@ -305,6 +316,7 @@
   (setf *player-conns* (make-hash-table :test 'equal))
   (setf *players* '())
   (setf *challenge* nil)
+  (setf *forced-card* (make-hash-table :test 'equal))
   (socket-close *socket*)
   (destroy-thread *listen-thread*)
   (setf *listen-thread* nil)
