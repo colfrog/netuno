@@ -206,7 +206,7 @@
 	((equal (car card) "draw2")
 	 (let* ((player (if name (cadr *players*) (car *players*)))
 		(conn (when player-conns (gethash player player-conns))))
-	   (draw-n-cards-and-print player 2 :send-message send-message :conn (when conn (socket-stream conn)))
+	   (draw-n-cards-and-print player 2 :send-message send-message :conn conn)
 	   (next-turn)))
 	((equal (car card) "skip")
 	 (next-turn))
